@@ -1,3 +1,5 @@
+@file:Suppress("EXPERIMENTAL_API_USAGE")
+
 package xmodem
 
 object ASCII {
@@ -14,3 +16,12 @@ infix fun Short.shl(rhs: Int): Short = (this.toInt() shl rhs).toShort()
 infix fun Short.shr(rhs: Int): Short = (this.toInt() shr rhs).toShort()
 
 fun Short.splitInHalf(): ByteArray = byteArrayOf((this shr 8).toByte(), this.toByte())
+
+fun Byte.asHex(): String = this.toUByte().asHex()
+
+fun UByte.asHex(): String {
+
+    val words = "0123456789ABCDEF"
+
+    return charArrayOf('0', 'x', words[this.toInt() / 16], words[this.toInt() % 16]).concatToString()
+}

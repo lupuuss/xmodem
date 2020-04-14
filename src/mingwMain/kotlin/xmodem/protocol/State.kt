@@ -1,6 +1,6 @@
 package xmodem.protocol
 
-sealed class State(val isFinishing: Boolean, private val name: String) {
+sealed class State(val isFinishing: Boolean, val name: String) {
 
     override fun toString(): String {
         return name

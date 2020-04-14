@@ -2,17 +2,24 @@
 
 package xmodem.protocol
 
+import ru.pocketbyte.kydra.log.KydraLog
+import ru.pocketbyte.kydra.log.debug
+import ru.pocketbyte.kydra.log.info
+import ru.pocketbyte.kydra.log.warn
 import xmodem.ASCII
+import xmodem.asHex
 import xmodem.checksum.Checksum
 import xmodem.com.ComPort
+import kotlin.system.getTimeMillis
 
 class XmodemReceiver(
-    com: String,
+    private val com: String,
     private val checksumType: Checksum.Type,
     private val timeoutMs: UInt = 10_000u,
-    private val repeat: Int = 10,
-    private val verbose: Boolean = true
+    private val repeat: Int = 10
 ) {
+    
+    private val bufferSize = 256
     private val checksum: Checksum
     private val initByte: Byte
     private val packetSize: Int
@@ -40,18 +47,20 @@ class XmodemReceiver(
     private var state: State = State.NoInit
         set(value) {
             field = value
-
-            if (verbose) {
-                println(state)
-            }
+            KydraLog.info(generateTag(), "State changed to: $value")
         }
 
+    private fun generateTag() = "[${state.name}|${repeatCounter + 1}|$expectedPacketNumber]"
+
     fun receive() {
+
+        KydraLog.info("Config {timeoutMs: $timeoutMs, initByte: ${initByte.asHex()}," +
+                " Packet size: $packetSize, checksum: $checksumType, com: $com}")
 
         try {
 
             comPort.editTimeouts {
-                ReadIntervalTimeout = 100u
+                ReadIntervalTimeout = 50u
                 ReadTotalTimeoutConstant = timeoutMs
                 ReadTotalTimeoutMultiplier = 1u
             }
@@ -64,39 +73,80 @@ class XmodemReceiver(
             throw XmodemIOException(e)
         }
 
-        comPort.write(initByte)
+        val time = getTimeMillis()
+        var answer = initByte
 
         do {
 
-            val block = comPort.readOrNull(packetSize)
+            comPort.write(answer)
+            KydraLog.debug(generateTag(), "Sent byte: ${answer.asHex()}")
+
+            val block = clearFrame(comPort.readOrNull(bufferSize))
 
             if (block != null) {
-
                 parsePacket(block)
-
             } else {
-                println("Timeout!")
+                KydraLog.warn(generateTag(), "Timeout!")
             }
 
-            val answer = when (state) {
-                State.NoInit -> initByte
-                State.AcceptPacket -> ASCII.ACK
+            answer = when (state) {
+                is State.NoInit -> initByte
+                is State.AcceptPacket -> ASCII.ACK
                 is State.RejectPacket -> ASCII.NAK
                 is State.Cancel -> ASCII.CAN
-                State.EOT -> ASCII.ACK
+                is State.EOT -> ASCII.ACK
             }
 
-            if (state is State.AcceptPacket) {
+            if (state is State.AcceptPacket || state.isFinishing) {
                 repeatCounter = 0
             } else {
                 repeatCounter++
-                println("Repeats [$repeatCounter/$repeat]")
             }
-
-            comPort.write(answer)
 
         } while (!state.isFinishing && repeatCounter < repeat)
 
+        if (repeatCounter == repeat) {
+            throw XmodemSenderTimeout(getTimeMillis() - time)
+        }
+
+        if (state is State.Cancel) {
+            throw XmodemCancelException(state as State.Cancel)
+        }
+
+        comPort.close()
+
+    }
+
+    private fun clearFrame(block: ByteArray?): ByteArray? {
+
+        KydraLog.debug(generateTag()) { "Received data: ${block?.map { it.asHex() }}" }
+
+        if (block == null || block.size == 1  || block.size == packetSize) {
+            return block
+        }
+
+        KydraLog.warn(generateTag(), "Unrecognized data received!")
+
+        var frameStart = 0
+
+        for (i in block.indices) {
+            if (block[i] == headerByte) {
+                frameStart = i
+                break
+            }
+        }
+
+        val frame = block.drop(frameStart)
+
+        return when {
+            frame.size == packetSize -> frame.toByteArray()
+
+            frame.size > packetSize -> frame.dropLast(frame.size - packetSize).toByteArray()
+
+            else -> null
+        }.also {
+            KydraLog.info(generateTag(), if (it == null) "Frame couldn't be recoverd!" else "Frame recovered!")
+        }
     }
 
     private fun parsePacket(block: ByteArray): ByteArray? {
@@ -114,7 +164,8 @@ class XmodemReceiver(
                 State.RejectPacket("Invalid packet length")
             }
             firstByte == headerByte && !checkPacketNumber(block) -> {
-                State.RejectPacket("Bad number! Expected: $expectedPacketNumber Received: ${block[1]}|${block[2]}")
+                State.RejectPacket("Bad number! Expected: ${expectedPacketNumber.asHex()} " +
+                        "Received: ${block[1].asHex()}|${block[2].asHex()}")
             }
             firstByte == headerByte && !checksum.verify(block.drop(3).toByteArray()) -> {
                 State.RejectPacket("Bad checksum!")
@@ -122,15 +173,18 @@ class XmodemReceiver(
             firstByte == headerByte -> {
                 State.AcceptPacket
             }
+            block.size != 1 -> {
+                State.RejectPacket("Bad first byte! Received: ${firstByte.asHex()} Expected header: ${headerByte.asHex()}")
+            }
             else -> {
-                State.RejectPacket("Bad first byte! Received: $firstByte Expected header: $headerByte")
+                State.RejectPacket("Bad byte! Received: ${firstByte.asHex()}")
             }
         }
 
         if (state !is State.NoInit || proposedState is State.AcceptPacket) {
             state = proposedState
-        } else if (verbose) {
-            println("Rejected init cause: $proposedState")
+        } else {
+            KydraLog.info(generateTag(), "Rejected initialization: $proposedState")
         }
 
         return if (state is State.AcceptPacket) {
@@ -153,6 +207,5 @@ class XmodemReceiver(
 
         return packetNumberDiff in -1..0 && packetNumber + packetNumberFill == 0xFFu
     }
-
 
 }
