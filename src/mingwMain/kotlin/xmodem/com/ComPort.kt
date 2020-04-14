@@ -70,8 +70,6 @@ class ComPort(
             dwBytesRead.ptr,
             null
         )
-
-        println("Written bytes: ${dwBytesRead.value}")
     }
 
     fun readOrNull(n: Int): ByteArray? = memScoped {
@@ -89,11 +87,11 @@ class ComPort(
             null
         )
 
-        if (readByte.value != bufferSize) {
+        if (readByte.value == 0u) {
             return null
         }
 
-        ByteArray(n) { buffer[it] }
+        ByteArray(readByte.value.toInt()) { buffer[it] }
     }
 
     fun close() {
