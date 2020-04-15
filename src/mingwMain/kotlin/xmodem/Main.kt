@@ -10,12 +10,10 @@ import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.validate
 import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.types.int
-import ru.pocketbyte.kydra.log.KydraLog
-import ru.pocketbyte.kydra.log.LogLevel
-import ru.pocketbyte.kydra.log.error
-import ru.pocketbyte.kydra.log.initDefault
+import ru.pocketbyte.kydra.log.*
 import xmodem.checksum.Checksum
 import xmodem.files.FileOutput
+import xmodem.log.Log
 import xmodem.protocol.XmodemException
 import xmodem.protocol.receiver.XmodemReceiver
 
@@ -86,7 +84,7 @@ class XmodemReceiveTask : XmodemTask("receive", "Receives a file via XMODEM prot
             if (stack) {
                 e.printStackTrace()
             } else {
-                KydraLog.error(e.toString())
+                Log.error(e.toString())
             }
         }
     }
@@ -94,7 +92,7 @@ class XmodemReceiveTask : XmodemTask("receive", "Receives a file via XMODEM prot
 
 class XmodemSendTask: XmodemTask("send", "Sends the passed file via XMODEM protocol.") {
     override fun run() {
-        KydraLog.error("Not implemented yet!")
+        Log.error("Not implemented yet!")
     }
 }
 

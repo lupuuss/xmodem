@@ -2,9 +2,9 @@
 
 package xmodem.protocol.receiver
 
-import ru.pocketbyte.kydra.log.KydraLog
 import ru.pocketbyte.kydra.log.info
 import ru.pocketbyte.kydra.log.warn
+import xmodem.log.Log
 import xmodem.ASCII
 import xmodem.asHex
 import xmodem.checksum.Checksum
@@ -43,19 +43,20 @@ class XmodemReceiver(
 
     private val comPort = ComPort(com)
     private var expectedPacketNumber: UByte = 1u
+    private var totalPacketCount: Int = 0
     private var retriesCounter = 0
 
     private var state: State = State.NoInit
         set(value) {
             field = value
-            KydraLog.info(generateTag(), "State changed to: $value")
+            Log.info(generateTag(), "State changed to: $value")
         }
 
     private fun generateTag() = "[${state.name}|${retriesCounter}|$expectedPacketNumber]"
 
     fun receive(file: FileOutput) {
 
-        KydraLog.info("Config {timeout: $timeoutMs, retries: $retries, initByte: ${initByte.asHex()}," +
+        Log.info("Config {timeout: $timeoutMs, retries: $retries, initByte: ${initByte.asHex()}," +
                 " Packet size: $packetSize, checksum: $checksumType, com: $com}")
 
         try {
@@ -76,6 +77,9 @@ class XmodemReceiver(
 
         comPort.write(initByte)
 
+        Log.updateStatus("[Total packets:  $totalPacketCount, Expected packet number: $expectedPacketNumber," +
+                " Retries: $retriesCounter, State: $state]")
+
         do {
 
             val block = clearFrame(comPort.readOrNull(bufferSize))
@@ -89,7 +93,7 @@ class XmodemReceiver(
                 }
 
             } else {
-                KydraLog.warn(generateTag(), "Timeout!")
+                Log.warn(generateTag(), "Timeout!")
             }
 
             val answer = when (state) {
@@ -100,20 +104,16 @@ class XmodemReceiver(
                 is State.EOT -> ASCII.ACK
             }
 
-            if (state is State.AcceptPacket || state.isFinishing) {
-                retriesCounter = 0
-            } else {
-                retriesCounter++
-            }
+            handleRetriesCount()
 
-            if (retriesCounter > retries) {
-                retriesCounter--
-                state = State.Cancel("Retries limit reached! Limit: $retries")
-            }
+            Log.updateStatus("[Total packets:  $totalPacketCount, Expected packet number: $expectedPacketNumber," +
+                    " Retries: $retriesCounter, State: $state]")
 
             comPort.write(answer)
 
         } while (!state.isFinishing)
+
+        Log.updateStatus("[End of transmission, Total packets: $totalPacketCount, State: $state]")
 
         comPort.close()
 
@@ -123,13 +123,27 @@ class XmodemReceiver(
 
     }
 
+    private fun handleRetriesCount() {
+
+        if (state is State.AcceptPacket || state.isFinishing) {
+            retriesCounter = 0
+        } else {
+            retriesCounter++
+        }
+
+        if (retriesCounter > retries) {
+            retriesCounter = 0
+            state = State.Cancel("Retries limit reached! Limit: $retries")
+        }
+    }
+
     private fun clearFrame(block: ByteArray?): ByteArray? {
 
         if (block == null || block.size == 1  || block.size == packetSize) {
             return block
         }
 
-        KydraLog.warn(generateTag(), "Unrecognized data received!")
+        Log.warn(generateTag(), "Unrecognized data received!")
 
         var frameStart = 0
 
@@ -149,7 +163,7 @@ class XmodemReceiver(
 
             else -> null
         }.also {
-            KydraLog.info(generateTag(), if (it == null) "Frame couldn't be recoverd!" else "Frame recovered!")
+            Log.info(generateTag(), if (it == null) "Frame couldn't be recoverd!" else "Frame recovered!")
         }
     }
 
@@ -196,12 +210,13 @@ class XmodemReceiver(
         if (state !is State.NoInit || proposedState is State.AcceptPacket || proposedState is State.Cancel) {
             state = proposedState
         } else {
-            KydraLog.info(generateTag(), "Rejected initialization: $proposedState")
+            Log.info(generateTag(), "Rejected initialization: $proposedState")
         }
 
         return if (state is State.AcceptPacket && state !is State.AcceptPacketDuplicate) {
 
             expectedPacketNumber++
+            totalPacketCount++
             block
                 .drop(3)
                 .dropLast(checksumType.byteSize)
