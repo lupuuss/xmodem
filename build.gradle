@@ -15,7 +15,7 @@ kotlin {
                 // Change to specify fully qualified name of your application's entry point:
                entryPoint = 'xmodem.main'
                 // Specify command-line arguments, if necessary:
-                runTask?.args('--port=COM3 --receiver')
+                runTask?.args('--io-path=file.txt', '--debug','--receiver')
             }
         }
     }

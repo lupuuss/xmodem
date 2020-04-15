@@ -6,13 +6,18 @@ import kotlinx.cinterop.*
 import platform.posix.*
 
 class FileOutput(
-    private val path: String
+    private val path: String,
+    private val mode: Mode
 ) {
+
+    enum class Mode(val str: String) {
+        Binary("wb"), Text("w")
+    }
 
     private lateinit var file: CPointer<FILE>
 
     fun open() {
-        val tmp = fopen(path, "w")
+        val tmp = fopen(path, mode.str)
 
         if (tmp == null) {
             throw FileOpenException(path)

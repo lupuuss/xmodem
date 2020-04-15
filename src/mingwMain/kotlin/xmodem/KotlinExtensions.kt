@@ -8,6 +8,7 @@ object ASCII {
     const val ACK: Byte = 0x06
     const val NAK: Byte = 0x15
     const val CAN: Byte = 0x18
+    const val SUB: Byte = 0x1A
     const val C: Byte = 0x43
 }
 

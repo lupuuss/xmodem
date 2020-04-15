@@ -4,7 +4,7 @@ abstract class XmodemException(msg: String?, cause: Throwable? = null) : Excepti
 
 class XmodemSenderTimeout(time: Long) : XmodemException("Sender didn't answer in $time ms!")
 
-class XmodemIOException(cause: Throwable) : XmodemException(null, cause)
+class XmodemIOException(cause: Throwable) : XmodemException(cause.message, cause)
 
 class XmodemCancelException(state: State.Cancel) : XmodemException("Transmission canceled! State: $state", null)
 

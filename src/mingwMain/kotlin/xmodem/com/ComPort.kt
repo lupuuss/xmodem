@@ -4,6 +4,9 @@ package xmodem.com
 
 import kotlinx.cinterop.*
 import platform.windows.*
+import ru.pocketbyte.kydra.log.KydraLog
+import ru.pocketbyte.kydra.log.debug
+import xmodem.asHex
 
 class ComPort(
     name: String
@@ -13,6 +16,7 @@ class ComPort(
 
     private val prefix = "\\\\.\\"
     private val name = if (name.startsWith(prefix)) name else "$prefix$name"
+    private val tag = "[Port: $name]"
 
     private var handle: HANDLE? = null
 
@@ -70,6 +74,8 @@ class ComPort(
             dwBytesRead.ptr,
             null
         )
+
+        KydraLog.debug(tag) { "Written bytes: ${bytes.map { it.asHex() }}" }
     }
 
     fun readOrNull(n: Int): ByteArray? = memScoped {
@@ -86,6 +92,8 @@ class ComPort(
             readByte.ptr,
             null
         )
+
+        KydraLog.debug (tag) { "Read bytes: ${buffer.readBytes(readByte.value.toInt()).map { it.asHex() }}" }
 
         if (readByte.value == 0u) {
             return null

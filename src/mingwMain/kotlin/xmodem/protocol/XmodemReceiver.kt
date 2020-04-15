@@ -50,11 +50,11 @@ class XmodemReceiver(
             KydraLog.info(generateTag(), "State changed to: $value")
         }
 
-    private fun generateTag() = "[${state.name}|${retriesCounter + 1}|$expectedPacketNumber]"
+    private fun generateTag() = "[${state.name}|${retriesCounter}|$expectedPacketNumber]"
 
     fun receive(file: FileOutput) {
 
-        KydraLog.info("Config {timeoutMs: $timeoutMs, initByte: ${initByte.asHex()}," +
+        KydraLog.info("Config {timeout: $timeoutMs, retries: $retries, initByte: ${initByte.asHex()}," +
                 " Packet size: $packetSize, checksum: $checksumType, com: $com}")
 
         try {
@@ -74,7 +74,6 @@ class XmodemReceiver(
         }
 
         comPort.write(initByte)
-        KydraLog.debug(generateTag(), "Sent first init byte: ${initByte.asHex()}")
 
         do {
 
@@ -106,26 +105,24 @@ class XmodemReceiver(
                 retriesCounter++
             }
 
-            if (retriesCounter >= retries) {
+            if (retriesCounter > retries) {
+                retriesCounter--
                 state = State.Cancel("Retries limit reached! Limit: $retries")
             }
 
             comPort.write(answer)
-            KydraLog.debug(generateTag(), "Sent byte: ${answer.asHex()}")
 
         } while (!state.isFinishing)
+
+        comPort.close()
 
         if (state is State.Cancel) {
             throw XmodemCancelException(state as State.Cancel)
         }
 
-        comPort.close()
-
     }
 
     private fun clearFrame(block: ByteArray?): ByteArray? {
-
-        KydraLog.debug(generateTag()) { "Received data: ${block?.map { it.asHex() }}" }
 
         if (block == null || block.size == 1  || block.size == packetSize) {
             return block
@@ -207,7 +204,7 @@ class XmodemReceiver(
             block
                 .drop(3)
                 .dropLast(checksumType.byteSize)
-                .dropLastWhile { it == ASCII.EOT}
+                .dropLastWhile { it == ASCII.SUB}
                 .toByteArray()
         } else {
             null
