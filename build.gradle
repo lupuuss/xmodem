@@ -15,7 +15,7 @@ kotlin {
                 // Change to specify fully qualified name of your application's entry point:
                entryPoint = 'xmodem.main'
                 // Specify command-line arguments, if necessary:
-                runTask?.args('')
+                runTask?.args('--port=COM3 --receiver')
             }
         }
     }
@@ -25,6 +25,7 @@ kotlin {
         mingwMain {
             dependencies {
                 implementation('ru.pocketbyte.kydra:kydra-log:1.0.5')
+                implementation('com.github.ajalt:clikt-multiplatform:2.6.0')
             }
         }
         mingwTest {
