@@ -17,7 +17,7 @@ import ru.pocketbyte.kydra.log.initDefault
 import xmodem.checksum.Checksum
 import xmodem.files.FileOutput
 import xmodem.protocol.XmodemException
-import xmodem.protocol.XmodemReceiver
+import xmodem.protocol.receiver.XmodemReceiver
 
 abstract class XmodemTask(name: String, help: String) : CliktCommand(name = name, help = help)
 {

@@ -1,9 +1,8 @@
 @file:Suppress("EXPERIMENTAL_API_USAGE", "EXPERIMENTAL_UNSIGNED_LITERALS")
 
-package xmodem.protocol
+package xmodem.protocol.receiver
 
 import ru.pocketbyte.kydra.log.KydraLog
-import ru.pocketbyte.kydra.log.debug
 import ru.pocketbyte.kydra.log.info
 import ru.pocketbyte.kydra.log.warn
 import xmodem.ASCII
@@ -11,12 +10,14 @@ import xmodem.asHex
 import xmodem.checksum.Checksum
 import xmodem.com.ComPort
 import xmodem.files.FileOutput
+import xmodem.protocol.XmodemCancelException
+import xmodem.protocol.XmodemIOException
 
 class XmodemReceiver(
     private val com: String,
     private val checksumType: Checksum.Type,
-    private val timeoutMs: UInt = 10_000u,
-    private val retries: Int = 20
+    private val timeoutMs: UInt,
+    private val retries: Int
 ) {
     
     private val bufferSize = 256

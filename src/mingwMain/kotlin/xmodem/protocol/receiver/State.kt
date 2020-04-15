@@ -1,4 +1,4 @@
-package xmodem.protocol
+package xmodem.protocol.receiver
 
 sealed class State(val isFinishing: Boolean, val name: String) {
 
