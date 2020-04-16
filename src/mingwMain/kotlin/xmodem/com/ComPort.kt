@@ -33,6 +33,14 @@ class ComPort(
         timeouts.apply(editor)
     }
 
+    fun fullPurge() {
+        val purgeResult = PurgeComm(handle, (PURGE_RXABORT or PURGE_RXCLEAR or PURGE_TXCLEAR or PURGE_TXABORT).toUInt())
+
+        if (purgeResult != TRUE) {
+            throw ComPurgeFailedException(name, GetLastError())
+        }
+    }
+
     fun open() = memScoped {
 
         handle = CreateFile?.invoke(
