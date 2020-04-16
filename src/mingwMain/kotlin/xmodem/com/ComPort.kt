@@ -11,26 +11,21 @@ import xmodem.log.Log
 class ComPort(
     name: String
 ) {
-
-    private var applyCustomSettings = false
-
     private val prefix = "\\\\.\\"
     private val name = if (name.startsWith(prefix)) name else "$prefix$name"
     private val tag = "[Port: $name]"
 
     private var handle: HANDLE? = null
 
-    private val timeouts = nativeHeap.alloc<COMMTIMEOUTS>()
-
-    private val dcb: DCB = nativeHeap.alloc()
+    private var dcbEditor: (DCB.() -> Unit)? = null
+    private var timeoutsEditor: (COMMTIMEOUTS.() -> Unit?)? = null
 
     fun editDCB(editor: DCB.() -> Unit) {
-        applyCustomSettings = true
-        dcb.apply(editor)
+        this.dcbEditor = editor
     }
 
     fun editTimeouts(editor: COMMTIMEOUTS.() -> Unit) {
-        timeouts.apply(editor)
+        this.timeoutsEditor = editor
     }
 
     fun fullPurge() {
@@ -57,12 +52,28 @@ class ComPort(
             throw ComOpenFailedException(name, GetLastError())
         }
 
-        if (SetCommTimeouts(handle, timeouts.ptr) != TRUE) {
-            throw ComSettingsApplyFailedException(name,"SetCommTimeouts", GetLastError())
+        val timeouts = alloc<COMMTIMEOUTS>()
+        val dcb = alloc<DCB>()
+
+        GetCommState(handle, dcb.ptr)
+        GetCommTimeouts(handle, timeouts.ptr)
+
+        timeoutsEditor?.let {
+
+            it(timeouts)
+
+            if (SetCommTimeouts(handle, timeouts.ptr) != TRUE) {
+                throw ComSettingsApplyFailedException(name,"SetCommTimeouts", GetLastError())
+            }
         }
 
-        if (applyCustomSettings && SetCommState(handle, dcb.ptr) != TRUE) {
-            throw ComSettingsApplyFailedException(name, "SetCommState", GetLastError())
+        dcbEditor?.let {
+
+            it(dcb)
+
+            if (SetCommState(handle, dcb.ptr) != TRUE) {
+                throw ComSettingsApplyFailedException(name, "SetCommState", GetLastError())
+            }
         }
     }
 
@@ -115,7 +126,5 @@ class ComPort(
         handle?.let {
             CloseHandle(it)
         }
-        nativeHeap.free(dcb)
-        nativeHeap.free(timeouts)
     }
 }
