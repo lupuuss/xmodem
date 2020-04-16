@@ -2,6 +2,9 @@
 
 package xmodem.protocol.receiver
 
+import platform.windows.CBR_9600
+import platform.windows.NOPARITY
+import platform.windows.ONESTOPBIT
 import ru.pocketbyte.kydra.log.debug
 import ru.pocketbyte.kydra.log.info
 import xmodem.log.Log
@@ -71,7 +74,15 @@ class XmodemReceiver(
                 ReadTotalTimeoutMultiplier = 1u
             }
 
+            comPort.editDCB {
+                BaudRate = CBR_9600.toUInt()
+                ByteSize = 8u
+                Parity = NOPARITY.toUByte()
+                StopBits = ONESTOPBIT.toUByte()
+            }
+
             comPort.open()
+            comPort.fullPurge()
 
         } catch (e: Exception) {
 
