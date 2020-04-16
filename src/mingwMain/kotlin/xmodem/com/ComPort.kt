@@ -46,15 +46,15 @@ class ComPort(
         )
 
         if (handle == INVALID_HANDLE_VALUE) {
-            throw ComOpenFailedException(name)
+            throw ComOpenFailedException(name, GetLastError())
         }
 
         if (SetCommTimeouts(handle, timeouts.ptr) != TRUE) {
-            throw ComSettingsApplyFailedException(name)
+            throw ComSettingsApplyFailedException(name,"SetCommTimeouts", GetLastError())
         }
 
         if (applyCustomSettings && SetCommState(handle, dcb.ptr) != TRUE) {
-            throw ComSettingsApplyFailedException(name)
+            throw ComSettingsApplyFailedException(name, "SetCommState", GetLastError())
         }
     }
 

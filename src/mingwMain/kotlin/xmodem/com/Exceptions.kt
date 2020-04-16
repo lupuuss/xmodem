@@ -1,5 +1,9 @@
 package xmodem.com
 
-class ComOpenFailedException(name: String) : Exception("$name port could not be opened!")
+import platform.windows.DWORD
 
-class ComSettingsApplyFailedException(name: String) : Exception("Setting couldn't be applied to $name port")
+class ComOpenFailedException(name: String, error: DWORD) : Exception("$name port could not be opened! Error code: $error")
+
+class ComSettingsApplyFailedException(
+    name: String, settingsName: String, error: DWORD
+) : Exception("Settings ($settingsName) couldn't be applied to $name port! Error code: $error")
