@@ -14,6 +14,7 @@ import ru.pocketbyte.kydra.log.*
 import xmodem.checksum.Checksum
 import xmodem.files.FileOutput
 import xmodem.log.Log
+import xmodem.protocol.BasicXmodemConfig
 import xmodem.protocol.XmodemException
 import xmodem.protocol.receiver.XmodemReceiver
 
@@ -33,7 +34,10 @@ abstract class XmodemTask(name: String, help: String) : CliktCommand(name = name
         .switch(*LogLevel.values().map { "--${it.name.toLowerCase()}" to it }.toTypedArray())
         .default(LogLevel.INFO)
 
-    protected val comPort by option("--port", "-p")
+    protected val stack by option(help = "If the flag is present, stack trace is printed.")
+        .flag(default = false)
+
+    private val comPort by option("--port", "-p")
         .default("COM3")
         .validate {
             val regex = "COM\\d\\d?".toRegex()
@@ -42,18 +46,18 @@ abstract class XmodemTask(name: String, help: String) : CliktCommand(name = name
             }
         }
 
-    protected val retries by option(help = "Sets number of retries after repeating errors.")
+    private val retries by option(help = "Sets number of retries after repeating errors.")
         .int()
         .default(10)
         .validate { require(it > 0) { "Retries number must be positive!" } }
 
-    protected val timeout by option(help = "Sets amount of time to wait for sender in ms.")
+    private val timeout by option(help = "Sets amount of time to wait for sender in ms.")
         .int()
         .default(10_000)
         .validate { require(it > 0) { "Timeout must be positive number!" } }
 
-    protected val stack by option(help = "If the flag is present, stack trace is printed.")
-        .flag(default = false)
+    protected val basicConfig = BasicXmodemConfig(comPort, timeout.toUInt(), retries)
+
 
 }
 
@@ -75,7 +79,9 @@ class XmodemReceiveTask : XmodemTask("receive", "Receives a file via XMODEM prot
 
             fileOutput.open()
 
-            XmodemReceiver(comPort, checksum, timeout.toUInt(), retries).receive(fileOutput)
+            val config = basicConfig.extend(checksum)
+
+            XmodemReceiver(config).receive(fileOutput)
 
             fileOutput.close()
 
@@ -96,17 +102,15 @@ class XmodemSendTask: XmodemTask("send", "Sends the passed file via XMODEM proto
     }
 }
 
-class Main() : CliktCommand(
+class Main : CliktCommand(
     printHelpOnEmptyArgs = true
 ) {
     override fun run() {
-
         if (currentContext.invokedSubcommand is XmodemReceiveTask) {
             println(">>> XMODEM RECEIVER STARTED")
         } else if (currentContext.invokedSubcommand is XmodemSendTask) {
             println(">>> XMODEM SENDER STARTED")
         }
-
     }
 }
 

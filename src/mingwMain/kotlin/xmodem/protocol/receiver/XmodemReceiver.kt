@@ -10,40 +10,17 @@ import ru.pocketbyte.kydra.log.info
 import xmodem.log.Log
 import xmodem.ASCII
 import xmodem.asHex
-import xmodem.checksum.Checksum
 import xmodem.com.ComPort
 import xmodem.files.FileOutput
 import xmodem.protocol.XmodemCancelException
+import xmodem.protocol.XmodemConfig
 import xmodem.protocol.XmodemIOException
 
 class XmodemReceiver(
-    private val com: String,
-    private val checksumType: Checksum.Type,
-    private val timeoutMs: UInt,
-    private val retries: Int
+    private val config: XmodemConfig
 ) {
 
-    private val checksum: Checksum
-    private val initByte: Byte
-    private val packetSize: Int
-    private val headerByte: Byte = ASCII.SOH
-
-    init {
-        when(checksumType) {
-            Checksum.Type.CRC16 -> {
-                checksum = Checksum.getCrc16(Checksum.xmodem16)
-                initByte = ASCII.C
-                packetSize = 133
-            }
-            Checksum.Type.SUM8 -> {
-                checksum = Checksum.getSum8()
-                initByte = ASCII.NAK
-                packetSize = 132
-            }
-        }
-    }
-
-    private val comPort = ComPort(com)
+    private val comPort = ComPort(config.com)
     private var expectedPacketNumber: UByte = 1u
     private var totalPacketCount: Int = 0
     private var retriesCounter = 0
@@ -63,34 +40,11 @@ class XmodemReceiver(
 
     fun receive(file: FileOutput) {
 
-        Log.info("Config {timeout: $timeoutMs, retries: $retries, initByte: ${initByte.asHex()}," +
-                " Packet size: $packetSize, checksum: $checksumType, com: $com}")
+        Log.info(config.toString())
 
-        try {
+        setupCom()
 
-            comPort.editTimeouts {
-                ReadIntervalTimeout = 10u
-                ReadTotalTimeoutConstant = timeoutMs
-                ReadTotalTimeoutMultiplier = 1u
-            }
-
-            comPort.editDCB {
-                BaudRate = CBR_9600.toUInt()
-                ByteSize = 8u
-                Parity = NOPARITY.toUByte()
-                StopBits = ONESTOPBIT.toUByte()
-            }
-
-            comPort.open()
-            comPort.fullPurge()
-
-        } catch (e: Exception) {
-
-            comPort.close()
-            throw XmodemIOException(e)
-        }
-
-        comPort.write(initByte)
+        comPort.write(config.initByte)
 
         printStatus()
 
@@ -117,7 +71,7 @@ class XmodemReceiver(
             }
 
             val answer = when (state) {
-                is State.NoInit -> initByte
+                is State.NoInit -> config.initByte
                 is State.AcceptPacket -> ASCII.ACK
                 is State.Cancel -> ASCII.CAN
                 is State.EOT -> ASCII.ACK
@@ -141,9 +95,59 @@ class XmodemReceiver(
 
     }
 
+    private fun printStatus() {
+        Log.updateStatus("[Total packets:  $totalPacketCount, Expected packet number: $expectedPacketNumber," +
+                " Retries: $retriesCounter, State: $state]")
+
+    }
+
+    private fun setupCom() {
+        try {
+
+            comPort.editTimeouts {
+                ReadIntervalTimeout = 10u
+                ReadTotalTimeoutConstant = config.timeoutMs
+                ReadTotalTimeoutMultiplier = 1u
+            }
+
+            comPort.editDCB {
+                BaudRate = CBR_9600.toUInt()
+                ByteSize = 8u
+                Parity = NOPARITY.toUByte()
+                StopBits = ONESTOPBIT.toUByte()
+            }
+
+            comPort.open()
+            comPort.fullPurge()
+
+        } catch (e: Exception) {
+
+            comPort.close()
+            throw XmodemIOException(e)
+        }
+    }
+
+    private fun checkControlByte(byte: Byte?) = when (byte) {
+        config.headerByte -> {
+            State.ExpectedPacket
+        }
+        ASCII.EOT -> {
+            State.EOT
+        }
+        ASCII.CAN -> {
+            State.Cancel("Canceled by the sender!")
+        }
+        null -> {
+            State.Timeout
+        }
+        else -> {
+            State.RejectPacket("Bad byte! Received: ${byte.asHex()}")
+        }
+    }
+
     private fun readPacketFromComPort(): ByteArray {
-        var requiredBytesCount = packetSize - 1
-        val packetBuilder = mutableListOf(headerByte)
+        var requiredBytesCount = config.packetSize - 1
+        val packetBuilder = mutableListOf(config.headerByte)
 
         while (requiredBytesCount > 0) {
 
@@ -158,12 +162,6 @@ class XmodemReceiver(
         return packetBuilder.toByteArray()
     }
 
-    private fun printStatus() {
-        Log.updateStatus("[Total packets:  $totalPacketCount, Expected packet number: $expectedPacketNumber," +
-                " Retries: $retriesCounter, State: $state]")
-
-    }
-
     private fun handleRetriesCount() {
 
         if (state is State.AcceptPacket || state.isFinishing) {
@@ -172,9 +170,9 @@ class XmodemReceiver(
             retriesCounter++
         }
 
-        if (retriesCounter > retries) {
+        if (retriesCounter > config.retries) {
             retriesCounter = 0
-            state = State.Cancel("Retries limit reached! Limit: $retries")
+            state = State.Cancel("Retries limit reached! Limit: ${config.retries}")
         }
     }
 
@@ -192,8 +190,8 @@ class XmodemReceiver(
             block == null -> {
                 State.Timeout
             }
-            block.size != packetSize -> {
-                State.RejectPacket("Invalid packet length! Expected: $packetSize Received: ${block.size}")
+            block.size != config.packetSize -> {
+                State.RejectPacket("Invalid packet length! Expected: ${config.packetSize} Received: ${block.size}")
             }
             !checkPacketNumber(block) -> {
                 State.RejectPacket("Bit error in packet number! Received: [${block[1].asHex()}|${block[2].asHex()}]")
@@ -204,7 +202,7 @@ class XmodemReceiver(
             getPacketNumberDiff(block) != 0 -> {
                 State.Cancel("Transmission out of sync!")
             }
-            !checksum.verify(block.drop(3).toByteArray()) -> {
+            !config.checksum.verify(block.drop(3).toByteArray()) -> {
                 State.RejectPacket("Bad checksum!")
             }
             else -> {
@@ -212,24 +210,6 @@ class XmodemReceiver(
             }
         }
     }
-
-    private fun checkControlByte(byte: Byte?) = when (byte) {
-            headerByte -> {
-                State.ExpectedPacket
-            }
-            ASCII.EOT -> {
-                State.EOT
-            }
-            ASCII.CAN -> {
-                State.Cancel("Canceled by the sender!")
-            }
-            null -> {
-                State.Timeout
-            }
-            else -> {
-                State.RejectPacket("Bad byte! Received: ${byte.asHex()}")
-            }
-        }
 
     private fun checkPacketNumber(block: ByteArray): Boolean {
         val packetNumber = block[1].toUByte()

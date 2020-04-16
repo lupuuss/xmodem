@@ -14,8 +14,6 @@ interface Checksum {
 
     companion object {
 
-        const val xmodem16: Short = 0x1021
-
         fun getCrc16(poly: Short) = ChecksumCrc16(poly)
 
         fun getSum8() = ChecksumAlgebraic8()
