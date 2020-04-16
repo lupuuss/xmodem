@@ -2,8 +2,8 @@
 
 package xmodem.protocol.receiver
 
+import ru.pocketbyte.kydra.log.debug
 import ru.pocketbyte.kydra.log.info
-import ru.pocketbyte.kydra.log.warn
 import xmodem.log.Log
 import xmodem.ASCII
 import xmodem.asHex
@@ -19,8 +19,7 @@ class XmodemReceiver(
     private val timeoutMs: UInt,
     private val retries: Int
 ) {
-    
-    private val bufferSize = 256
+
     private val checksum: Checksum
     private val initByte: Byte
     private val packetSize: Int
@@ -46,13 +45,18 @@ class XmodemReceiver(
     private var totalPacketCount: Int = 0
     private var retriesCounter = 0
 
-    private var state: State = State.NoInit
+    private var state: State = State.NoInit()
         set(value) {
-            field = value
-            Log.info(generateTag(), "State changed to: $value")
+            field = if (field is State.NoInit && value !is State.AcceptPacket && value !is State.ExpectedPacket) {
+                State.NoInit(value)
+            } else {
+                value
+            }
+
+            Log.debug(generateTag(), "Status changed: $field")
         }
 
-    private fun generateTag() = "[${state.name}|${retriesCounter}|$expectedPacketNumber]"
+    private fun generateTag() = "[$state|${retriesCounter}|$expectedPacketNumber]"
 
     fun receive(file: FileOutput) {
 
@@ -62,7 +66,7 @@ class XmodemReceiver(
         try {
 
             comPort.editTimeouts {
-                ReadIntervalTimeout = 50u
+                ReadIntervalTimeout = 10u
                 ReadTotalTimeoutConstant = timeoutMs
                 ReadTotalTimeoutMultiplier = 1u
             }
@@ -77,39 +81,42 @@ class XmodemReceiver(
 
         comPort.write(initByte)
 
-        Log.updateStatus("[Total packets:  $totalPacketCount, Expected packet number: $expectedPacketNumber," +
-                " Retries: $retriesCounter, State: $state]")
+        printStatus()
 
         do {
 
-            val block = clearFrame(comPort.readOrNull(bufferSize))
+            val controlByte = comPort.readOrNull(1)?.firstOrNull()
 
-            if (block != null) {
+            state = checkControlByte(controlByte)
+            printStatus()
 
-                val data = parsePacket(block)
+            if (state is State.ExpectedPacket) {
 
-                if (data != null) {
+                val packet = readPacketFromComPort()
+
+                state = checkPacket(packet)
+                printStatus()
+
+                if (state is State.AcceptPacket && state !is State.AcceptPacketDuplicate) {
+                    expectedPacketNumber++
+                    totalPacketCount++
+                    val data = readDataFromPacket(packet)
                     file.write(data)
                 }
-
-            } else {
-                Log.warn(generateTag(), "Timeout!")
             }
 
             val answer = when (state) {
                 is State.NoInit -> initByte
                 is State.AcceptPacket -> ASCII.ACK
-                is State.RejectPacket -> ASCII.NAK
                 is State.Cancel -> ASCII.CAN
                 is State.EOT -> ASCII.ACK
+                else -> ASCII.NAK
             }
 
-            handleRetriesCount()
-
-            Log.updateStatus("[Total packets:  $totalPacketCount, Expected packet number: $expectedPacketNumber," +
-                    " Retries: $retriesCounter, State: $state]")
-
             comPort.write(answer)
+
+            handleRetriesCount()
+            printStatus()
 
         } while (!state.isFinishing)
 
@@ -120,6 +127,29 @@ class XmodemReceiver(
         if (state is State.Cancel) {
             throw XmodemCancelException(state as State.Cancel)
         }
+
+    }
+
+    private fun readPacketFromComPort(): ByteArray {
+        var requiredBytesCount = packetSize - 1
+        val packetBuilder = mutableListOf(headerByte)
+
+        while (requiredBytesCount > 0) {
+
+            val part = comPort.readOrNull(requiredBytesCount)
+
+            if (part != null) {
+                packetBuilder.addAll(part.toList())
+                requiredBytesCount -= part.size
+            }
+        }
+
+        return packetBuilder.toByteArray()
+    }
+
+    private fun printStatus() {
+        Log.updateStatus("[Total packets:  $totalPacketCount, Expected packet number: $expectedPacketNumber," +
+                " Retries: $retriesCounter, State: $state]")
 
     }
 
@@ -137,95 +167,58 @@ class XmodemReceiver(
         }
     }
 
-    private fun clearFrame(block: ByteArray?): ByteArray? {
+    private fun readDataFromPacket(packet: ByteArray): ByteArray {
+        return packet.drop(3)
+            .dropLast(2)
+            .dropLastWhile {
+                it == ASCII.SUB
+            }.toByteArray()
+    }
 
-        if (block == null || block.size == 1  || block.size == packetSize) {
-            return block
-        }
-
-        Log.warn(generateTag(), "Unrecognized data received!")
-
-        var frameStart = 0
-
-        for (i in block.indices) {
-            if (block[i] == headerByte) {
-                frameStart = i
-                break
-            }
-        }
-
-        val frame = block.drop(frameStart)
+    private fun checkPacket(block: ByteArray?): State {
 
         return when {
-            frame.size == packetSize -> frame.toByteArray()
-
-            frame.size > packetSize -> frame.dropLast(frame.size - packetSize).toByteArray()
-
-            else -> null
-        }.also {
-            Log.info(generateTag(), if (it == null) "Frame couldn't be recoverd!" else "Frame recovered!")
-        }
-    }
-
-    private fun parsePacket(block: ByteArray): ByteArray? {
-
-        val firstByte = block.first()
-
-        val proposedState = when {
-            firstByte == headerByte -> when {
-
-                block.size != packetSize -> {
-                    State.RejectPacket("Invalid packet length")
-                }
-                !checkPacketNumber(block) -> {
-                    State.RejectPacket("Bit error in packet number! Received: [${block[1].asHex()}|${block[2].asHex()}]")
-                }
-                getPacketNumberDiff(block) == -1 -> {
-                    State.AcceptPacketDuplicate()
-                }
-                getPacketNumberDiff(block) != 0 -> {
-                    State.Cancel("Transmission out of sync!")
-                }
-                !checksum.verify(block.drop(3).toByteArray()) -> {
-                    State.RejectPacket("Bad checksum!")
-                }
-                else -> {
-                    State.AcceptPacket()
-                }
+            block == null -> {
+                State.Timeout
             }
-            block.size != 1 -> {
-                State.RejectPacket("Bad first byte! Received: ${firstByte.asHex()} Expected header: ${headerByte.asHex()}")
+            block.size != packetSize -> {
+                State.RejectPacket("Invalid packet length! Expected: $packetSize Received: ${block.size}")
             }
-            firstByte == ASCII.EOT -> {
-                State.EOT
+            !checkPacketNumber(block) -> {
+                State.RejectPacket("Bit error in packet number! Received: [${block[1].asHex()}|${block[2].asHex()}]")
             }
-            firstByte == ASCII.CAN -> {
-                State.Cancel("Canceled by the sender!")
+            getPacketNumberDiff(block) == -1 -> {
+                State.AcceptPacketDuplicate()
+            }
+            getPacketNumberDiff(block) != 0 -> {
+                State.Cancel("Transmission out of sync!")
+            }
+            !checksum.verify(block.drop(3).toByteArray()) -> {
+                State.RejectPacket("Bad checksum!")
             }
             else -> {
-                State.RejectPacket("Bad byte! Received: ${firstByte.asHex()}")
+                State.AcceptPacket()
             }
         }
-
-        if (state !is State.NoInit || proposedState is State.AcceptPacket || proposedState is State.Cancel) {
-            state = proposedState
-        } else {
-            Log.info(generateTag(), "Rejected initialization: $proposedState")
-        }
-
-        return if (state is State.AcceptPacket && state !is State.AcceptPacketDuplicate) {
-
-            expectedPacketNumber++
-            totalPacketCount++
-            block
-                .drop(3)
-                .dropLast(checksumType.byteSize)
-                .dropLastWhile { it == ASCII.SUB}
-                .toByteArray()
-        } else {
-            null
-        }
     }
+
+    private fun checkControlByte(byte: Byte?) = when (byte) {
+            headerByte -> {
+                State.ExpectedPacket
+            }
+            ASCII.EOT -> {
+                State.EOT
+            }
+            ASCII.CAN -> {
+                State.Cancel("Canceled by the sender!")
+            }
+            null -> {
+                State.Timeout
+            }
+            else -> {
+                State.RejectPacket("Bad byte! Received: ${byte.asHex()}")
+            }
+        }
 
     private fun checkPacketNumber(block: ByteArray): Boolean {
         val packetNumber = block[1].toUByte()
