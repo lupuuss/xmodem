@@ -14,7 +14,7 @@ import ru.pocketbyte.kydra.log.*
 import xmodem.checksum.Checksum
 import xmodem.files.FileOutput
 import xmodem.log.Log
-import xmodem.protocol.BasicXmodemConfig
+import xmodem.protocol.Xmodem
 import xmodem.protocol.XmodemException
 import xmodem.protocol.receiver.XmodemReceiver
 
@@ -56,8 +56,11 @@ abstract class XmodemTask(name: String, help: String) : CliktCommand(name = name
         .default(10_000)
         .validate { require(it > 0) { "Timeout must be positive number!" } }
 
-    protected val basicConfig = BasicXmodemConfig(comPort, timeout.toUInt(), retries)
+    protected lateinit var basicConfig: Xmodem.BasicConfig
 
+    fun initBasicConfig() {
+        basicConfig = Xmodem.BasicConfig(comPort, timeout.toUInt(), retries)
+    }
 
 }
 
@@ -72,6 +75,8 @@ class XmodemReceiveTask : XmodemTask("receive", "Receives a file via XMODEM prot
     override fun run() {
 
         KydraLog.initDefault(logLevel)
+
+        initBasicConfig()
 
         try {
 

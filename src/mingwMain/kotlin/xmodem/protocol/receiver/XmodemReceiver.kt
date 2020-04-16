@@ -2,9 +2,6 @@
 
 package xmodem.protocol.receiver
 
-import platform.windows.CBR_9600
-import platform.windows.NOPARITY
-import platform.windows.ONESTOPBIT
 import ru.pocketbyte.kydra.log.debug
 import ru.pocketbyte.kydra.log.info
 import xmodem.log.Log
@@ -13,11 +10,10 @@ import xmodem.asHex
 import xmodem.com.ComPort
 import xmodem.files.FileOutput
 import xmodem.protocol.XmodemCancelException
-import xmodem.protocol.XmodemConfig
-import xmodem.protocol.XmodemIOException
+import xmodem.protocol.Xmodem
 
 class XmodemReceiver(
-    private val config: XmodemConfig
+    private val config: Xmodem.Config
 ) {
 
     private val comPort = ComPort(config.com)
@@ -42,7 +38,7 @@ class XmodemReceiver(
 
         Log.info(config.toString())
 
-        setupCom()
+        Xmodem.setupAndOpenCom(comPort, config)
 
         comPort.write(config.initByte)
 
@@ -101,31 +97,7 @@ class XmodemReceiver(
 
     }
 
-    private fun setupCom() {
-        try {
 
-            comPort.editTimeouts {
-                ReadIntervalTimeout = 10u
-                ReadTotalTimeoutConstant = config.timeoutMs
-                ReadTotalTimeoutMultiplier = 1u
-            }
-
-            comPort.editDCB {
-                BaudRate = CBR_9600.toUInt()
-                ByteSize = 8u
-                Parity = NOPARITY.toUByte()
-                StopBits = ONESTOPBIT.toUByte()
-            }
-
-            comPort.open()
-            comPort.fullPurge()
-
-        } catch (e: Exception) {
-
-            comPort.close()
-            throw XmodemIOException(e)
-        }
-    }
 
     private fun checkControlByte(byte: Byte?) = when (byte) {
         config.headerByte -> {
