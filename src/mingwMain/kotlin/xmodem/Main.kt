@@ -12,11 +12,13 @@ import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.types.int
 import ru.pocketbyte.kydra.log.*
 import xmodem.checksum.Checksum
+import xmodem.files.FileInput
 import xmodem.files.FileOutput
 import xmodem.log.Log
 import xmodem.protocol.Xmodem
 import xmodem.protocol.XmodemException
 import xmodem.protocol.receiver.XmodemReceiver
+import xmodem.protocol.sender.XmodemSender
 
 abstract class XmodemTask(name: String, help: String) : CliktCommand(name = name, help = help)
 {
@@ -45,6 +47,12 @@ abstract class XmodemTask(name: String, help: String) : CliktCommand(name = name
                 "Com port name must match following regex: $regex"
             }
         }
+
+    fun initKydraLogger() {
+        KydraLog.initDefault(level = logLevel)
+
+        KydraLog.log(logLevel, "Chosen log level: $logLevel")
+    }
 }
 
 class XmodemReceiveTask : XmodemTask("receive", "Receives a file via XMODEM protocol.") {
@@ -68,7 +76,7 @@ class XmodemReceiveTask : XmodemTask("receive", "Receives a file via XMODEM prot
 
     override fun run() {
 
-        KydraLog.initDefault(logLevel)
+        initKydraLogger()
 
         try {
 
@@ -95,7 +103,27 @@ class XmodemReceiveTask : XmodemTask("receive", "Receives a file via XMODEM prot
 
 class XmodemSendTask: XmodemTask("send", "Sends the passed file via XMODEM protocol.") {
     override fun run() {
-        Log.error("Not implemented yet!")
+
+        initKydraLogger()
+
+        try {
+
+            val file = FileInput(path, FileInput.Mode.Binary)
+
+            file.open()
+
+            XmodemSender(comPort).send(file)
+
+            file.close()
+
+        } catch (e: Exception) {
+            if (stack) {
+                e.printStackTrace()
+            } else {
+                Log.error(e.toString())
+            }
+        }
+
     }
 }
 

@@ -6,4 +6,7 @@ abstract class XmodemException(msg: String?, cause: Throwable? = null) : Excepti
 
 class XmodemIOException(cause: Throwable) : XmodemException(cause.message, cause)
 
-class XmodemCancelException(state: State.Cancel) : XmodemException("Transmission canceled! State: $state", null)
+class XmodemCancelException(msg: String) : XmodemException(msg, null) {
+
+    constructor(state: State.Cancel) : this("Transmission canceled! State: $state")
+}
