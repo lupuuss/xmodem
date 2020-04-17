@@ -34,8 +34,12 @@ object Xmodem {
         }
     }
 
+    const val initByteCrc16 = ASCII.C
+    const val initByteSum8 = ASCII.NAK
+    const val dataSize = 128
+
     class Config(
-        private val checksumType: Checksum.Type
+        val checksumType: Checksum.Type
     ) {
 
         val checksum: Checksum
@@ -48,12 +52,12 @@ object Xmodem {
             when(checksumType) {
                 Checksum.Type.CRC16 -> {
                     checksum = Checksum.getCrc16(xmodemPolyCrc16)
-                    initByte = ASCII.C
+                    initByte = initByteCrc16
                     packetSize = 133
                 }
                 Checksum.Type.SUM8 -> {
                     checksum = Checksum.getSum8()
-                    initByte = ASCII.NAK
+                    initByte = initByteSum8
                     packetSize = 132
                 }
             }
