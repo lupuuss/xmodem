@@ -103,7 +103,6 @@ class ComPort(
         val buffer = allocArray<ByteVar>(n)
         val readByte = alloc<UIntVar>()
 
-
         ReadFile(
             handle,
             buffer.pointed.ptr,

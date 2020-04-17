@@ -4,6 +4,7 @@ package xmodem.protocol.receiver
 
 import ru.pocketbyte.kydra.log.debug
 import ru.pocketbyte.kydra.log.info
+import ru.pocketbyte.kydra.log.warn
 import xmodem.log.Log
 import xmodem.ASCII
 import xmodem.asHex
@@ -26,7 +27,7 @@ class XmodemReceiver(
 
     private var state: State = State.NoInit()
         set(value) {
-            field = if (field is State.NoInit && value !is State.AcceptPacket && value !is State.ExpectedPacket) {
+            field = if (field is State.NoInit && value !is State.AcceptPacket && value !is State.PacketFound) {
                 State.NoInit(value)
             } else {
                 value
@@ -43,7 +44,7 @@ class XmodemReceiver(
         Log.info("Receiver config: {Retries limit: $retries, timeout: $timeoutMs ms}")
 
         Xmodem.setupAndOpenCom(comPort) {
-            ReadIntervalTimeout = 10u
+            ReadIntervalTimeout = 100u
             ReadTotalTimeoutConstant = timeoutMs
             ReadTotalTimeoutMultiplier = 1u
         }
@@ -54,14 +55,12 @@ class XmodemReceiver(
 
         do {
 
-            val controlByte = comPort.readOrNull(1)?.firstOrNull()
+            val packet = comPort.readOrNull(config.packetSize)
 
-            state = checkControlByte(controlByte)
+            state = checkControlByte(packet?.firstOrNull())
             printStatus()
 
-            if (state is State.ExpectedPacket) {
-
-                val packet = readPacketFromComPort()
+            if (state is State.PacketFound) {
 
                 state = checkPacket(packet)
                 printStatus()
@@ -69,7 +68,7 @@ class XmodemReceiver(
                 if (state is State.AcceptPacket && state !is State.AcceptPacketDuplicate) {
                     expectedPacketNumber++
                     totalPacketCount++
-                    val data = readDataFromPacket(packet)
+                    val data = readDataFromPacket(packet!!)
                     file.write(data)
                 }
             }
@@ -82,6 +81,10 @@ class XmodemReceiver(
                 is State.Cancel -> ASCII.CAN
                 is State.EOT -> ASCII.ACK
                 else -> ASCII.NAK
+            }
+
+            if (state is State.RejectPacket) {
+                Log.warn(generateTag(), "Packet rejected!")
             }
 
             comPort.write(answer)
@@ -108,7 +111,7 @@ class XmodemReceiver(
 
     private fun checkControlByte(byte: Byte?) = when (byte) {
         config.headerByte -> {
-            State.ExpectedPacket
+            State.PacketFound
         }
         ASCII.EOT -> {
             State.EOT

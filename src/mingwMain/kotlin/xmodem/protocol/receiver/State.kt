@@ -14,7 +14,7 @@ sealed class State(open val isFinishing: Boolean, val name: String) {
         }
     }
 
-    object ExpectedPacket : State(false, "ExpectedPacket")
+    object PacketFound : State(false, "PacketFound")
 
     object Timeout : State(false, "Timeout")
 
