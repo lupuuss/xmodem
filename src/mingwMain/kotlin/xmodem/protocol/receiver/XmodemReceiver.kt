@@ -135,6 +135,8 @@ class XmodemReceiver(
             if (part != null) {
                 packetBuilder.addAll(part.toList())
                 requiredBytesCount -= part.size
+            } else {
+                break
             }
         }
 
