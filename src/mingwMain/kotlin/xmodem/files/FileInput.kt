@@ -5,6 +5,10 @@ package xmodem.files
 import kotlinx.cinterop.*
 import platform.posix.*
 import platform.windows.GetFileSize
+import platform.windows.GetLastError
+import platform.windows.INVALID_FILE_SIZE
+import ru.pocketbyte.kydra.log.debug
+import xmodem.log.Log
 
 class FileInput(
     private val path: String,
@@ -29,12 +33,19 @@ class FileInput(
     fun read(n: Int): ByteArray = memScoped {
         val buffer = allocArray<ByteVar>(n)
 
-        fread(buffer.pointed.ptr, 1u, n.toULong(), file )
+        val allRead = fread(buffer.pointed.ptr, 1u, n.toULong(), file)
 
-        return buffer.readBytes(n)
+        return buffer.readBytes(allRead.toInt())
     }
 
-    fun size() = GetFileSize(file, null)
+    fun size(): Int {
+
+        fseek(file, 0, SEEK_END)
+        val size = ftell(file)
+        rewind(file)
+
+        return size
+    }
 
     fun close() {
         fclose(file)
