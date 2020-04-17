@@ -3,6 +3,7 @@
 package xmodem.protocol
 
 import platform.windows.CBR_9600
+import platform.windows.COMMTIMEOUTS
 import platform.windows.NOPARITY
 import platform.windows.ONESTOPBIT
 import xmodem.ASCII
@@ -11,14 +12,10 @@ import xmodem.com.ComPort
 
 object Xmodem {
 
-    fun setupAndOpenCom(comPort: ComPort, config: BasicConfig) {
+    fun setupAndOpenCom(comPort: ComPort, timeoutEditor: (COMMTIMEOUTS.() -> Unit)?) {
         try {
 
-            comPort.editTimeouts {
-                ReadIntervalTimeout = 10u
-                ReadTotalTimeoutConstant = config.timeoutMs
-                ReadTotalTimeoutMultiplier = 1u
-            }
+            comPort.editTimeouts(timeoutEditor ?: {})
 
             comPort.editDCB {
                 BaudRate = CBR_9600.toUInt()
@@ -37,28 +34,9 @@ object Xmodem {
         }
     }
 
-    open class BasicConfig(
-        val com: String,
-        val timeoutMs: UInt,
-        val retries: Int
-    ) {
-        fun extend(checksum: Checksum.Type): Config {
-            return Config(this, checksum)
-        }
-
-        fun extendOrNull(initByte: Byte?): Config? = when (initByte) {
-            ASCII.C -> extend(Checksum.Type.CRC16)
-            ASCII.NAK -> extend(Checksum.Type.SUM8)
-            else -> null
-        }
-    }
-
     class Config(
-        com: String,
-        timeoutMs: UInt,
-        retries: Int,
-        checksumType: Checksum.Type
-    ) : BasicConfig(com, timeoutMs, retries) {
+        private val checksumType: Checksum.Type
+    ) {
 
         val checksum: Checksum
         val initByte: Byte
@@ -81,9 +59,18 @@ object Xmodem {
             }
         }
 
-        constructor(
-            basic: BasicConfig,
-            checksum: Checksum.Type
-        ) : this(basic.com, basic.timeoutMs, basic.retries, checksum)
+        override fun toString(): String {
+            return "Config {checksum: $checksumType, initByte: $initByte," +
+                    " packetSize: $packetSize, headerByte: $headerByte}"
+        }
+
+        companion object {
+
+            fun getBasedOnInitByte(initByte: Byte?) = when (initByte) {
+                ASCII.C -> Config(Checksum.Type.CRC16)
+                ASCII.NAK -> Config(Checksum.Type.SUM8)
+                else -> null
+            }
+        }
     }
 }

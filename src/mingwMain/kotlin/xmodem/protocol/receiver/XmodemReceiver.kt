@@ -13,10 +13,13 @@ import xmodem.protocol.XmodemCancelException
 import xmodem.protocol.Xmodem
 
 class XmodemReceiver(
+    com: String,
+    private val timeoutMs: UInt,
+    private val retries: Int,
     private val config: Xmodem.Config
 ) {
 
-    private val comPort = ComPort(config.com)
+    private val comPort = ComPort(com)
     private var expectedPacketNumber: UByte = 1u
     private var totalPacketCount: Int = 0
     private var retriesCounter = 0
@@ -37,8 +40,13 @@ class XmodemReceiver(
     fun receive(file: FileOutput) {
 
         Log.info(config.toString())
+        Log.info("Receiver config: {Retries limit: $retries, timeout: $timeoutMs ms}")
 
-        Xmodem.setupAndOpenCom(comPort, config)
+        Xmodem.setupAndOpenCom(comPort) {
+            ReadIntervalTimeout = 10u
+            ReadTotalTimeoutConstant = timeoutMs
+            ReadTotalTimeoutMultiplier = 1u
+        }
 
         comPort.write(config.initByte)
 
@@ -97,8 +105,6 @@ class XmodemReceiver(
 
     }
 
-
-
     private fun checkControlByte(byte: Byte?) = when (byte) {
         config.headerByte -> {
             State.ExpectedPacket
@@ -142,9 +148,9 @@ class XmodemReceiver(
             retriesCounter++
         }
 
-        if (retriesCounter > config.retries) {
+        if (retriesCounter > retries) {
             retriesCounter = 0
-            state = State.Cancel("Retries limit reached! Limit: ${config.retries}")
+            state = State.Cancel("Retries limit reached! Limit: ${retries}")
         }
     }
 

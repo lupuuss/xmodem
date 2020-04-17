@@ -37,7 +37,7 @@ abstract class XmodemTask(name: String, help: String) : CliktCommand(name = name
     protected val stack by option(help = "If the flag is present, stack trace is printed.")
         .flag(default = false)
 
-    private val comPort by option("--port", "-p")
+    protected val comPort by option("--port", "-p")
         .default("COM3")
         .validate {
             val regex = "COM\\d\\d?".toRegex()
@@ -45,6 +45,10 @@ abstract class XmodemTask(name: String, help: String) : CliktCommand(name = name
                 "Com port name must match following regex: $regex"
             }
         }
+}
+
+class XmodemReceiveTask : XmodemTask("receive", "Receives a file via XMODEM protocol.") {
+
 
     private val retries by option(help = "Sets number of retries after repeating errors.")
         .int()
@@ -56,16 +60,6 @@ abstract class XmodemTask(name: String, help: String) : CliktCommand(name = name
         .default(10_000)
         .validate { require(it > 0) { "Timeout must be positive number!" } }
 
-    protected lateinit var basicConfig: Xmodem.BasicConfig
-
-    fun initBasicConfig() {
-        basicConfig = Xmodem.BasicConfig(comPort, timeout.toUInt(), retries)
-    }
-
-}
-
-class XmodemReceiveTask : XmodemTask("receive", "Receives a file via XMODEM protocol.") {
-
     private val checksum by option(help = "Switches between checksum type.")
         .switch(
             "--crc16" to Checksum.Type.CRC16,
@@ -76,17 +70,15 @@ class XmodemReceiveTask : XmodemTask("receive", "Receives a file via XMODEM prot
 
         KydraLog.initDefault(logLevel)
 
-        initBasicConfig()
-
         try {
 
             val fileOutput = FileOutput(path, FileOutput.Mode.Binary)
 
             fileOutput.open()
 
-            val config = basicConfig.extend(checksum)
+            val config = Xmodem.Config(checksum)
 
-            XmodemReceiver(config).receive(fileOutput)
+            XmodemReceiver(comPort, timeout.toUInt(), retries, config).receive(fileOutput)
 
             fileOutput.close()
 
