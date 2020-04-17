@@ -4,11 +4,6 @@ package xmodem.files
 
 import kotlinx.cinterop.*
 import platform.posix.*
-import platform.windows.GetFileSize
-import platform.windows.GetLastError
-import platform.windows.INVALID_FILE_SIZE
-import ru.pocketbyte.kydra.log.debug
-import xmodem.log.Log
 
 class FileInput(
     private val path: String,
