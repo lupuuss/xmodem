@@ -4,6 +4,7 @@ package xmodem.files
 
 import kotlinx.cinterop.*
 import platform.posix.*
+import platform.windows.GetFileSize
 
 class FileInput(
     private val path: String,
@@ -32,6 +33,8 @@ class FileInput(
 
         return buffer.readBytes(n)
     }
+
+    fun size() = GetFileSize(file, null)
 
     fun close() {
         fclose(file)
