@@ -74,6 +74,8 @@ class XmodemReceiver(
                 }
             }
 
+            handleRetriesCount()
+
             val answer = when (state) {
                 is State.NoInit -> config.initByte
                 is State.AcceptPacket -> ASCII.ACK
@@ -84,7 +86,6 @@ class XmodemReceiver(
 
             comPort.write(answer)
 
-            handleRetriesCount()
             printStatus()
 
         } while (!state.isFinishing)
