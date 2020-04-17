@@ -25,10 +25,12 @@ class FileInput(
         }
     }
 
-    fun read(n: Int) = memScoped {
+    fun read(n: Int): ByteArray = memScoped {
         val buffer = allocArray<ByteVar>(n)
 
         fread(buffer.pointed.ptr, 1u, n.toULong(), file )
+
+        return buffer.readBytes(n)
     }
 
     fun close() {
