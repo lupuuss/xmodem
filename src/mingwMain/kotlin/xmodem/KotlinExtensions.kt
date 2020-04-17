@@ -26,3 +26,10 @@ fun UByte.asHex(): String {
 
     return charArrayOf('0', 'x', words[this.toInt() / 16], words[this.toInt() % 16]).concatToString()
 }
+
+fun repeatByte(byte: Byte, n: Int) = ByteArray(n) { byte }
+
+fun <T : Any> cycle(vararg values: T): Sequence<T> {
+    var i = 0
+    return generateSequence { values[i++ % values.size] }
+}
