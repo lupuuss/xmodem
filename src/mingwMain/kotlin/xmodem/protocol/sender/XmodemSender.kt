@@ -19,7 +19,7 @@ enum class State {
 }
 
 class XmodemSender(
-    private val com: String
+    com: String
 ) {
     private val progressBarSize = 50
 
@@ -32,7 +32,7 @@ class XmodemSender(
 
     private val animIter = cycle(".  ", ".. ", "...", ".. ", ".  ").iterator()
 
-    private lateinit var currentPacket: ByteArray
+    private var currentPacket: ByteArray? = null
 
     private var state = State.NoInit
 
@@ -57,14 +57,15 @@ class XmodemSender(
 
         do {
 
-            if (state == State.Accepted) {
-
-                val data = file.read(Xmodem.dataSize)
-                currentPacket = makePacket(data, config)
-            }
-
             if (state == State.Accepted || state == State.Rejected) {
-                comPort.write(currentPacket)
+
+                if (currentPacket == null) {
+
+                    val data = file.read(Xmodem.dataSize)
+                    currentPacket = makePacket(data, config)
+                }
+
+                comPort.write(currentPacket!!)
                 state = State.WaitingForAnswer
             }
 
@@ -75,7 +76,7 @@ class XmodemSender(
             state = when (controlByte) {
                 null -> State.WaitingForAnswer
                 ASCII.ACK -> State.Accepted
-                ASCII.NAK -> State.Rejected
+                ASCII.NAK, config.initByte -> State.Rejected
                 ASCII.CAN -> State.Canceled
                 else -> State.UnrecognizedByte
             }
@@ -83,6 +84,7 @@ class XmodemSender(
             if (state == State.Accepted) {
                 packetNumber++
                 packetsCounter++
+                currentPacket = null
             }
 
             printStatus()
