@@ -106,7 +106,7 @@ class XmodemReceiveTask : XmodemTask("receive", "Receives a file via XMODEM prot
 
             val config = Xmodem.Config(checksum)
 
-            XmodemReceiver(comPort, timeout.toUInt(), retries, config).receive(fileOutput)
+            XmodemReceiver(comConfig, timeout.toUInt(), retries, config).receive(fileOutput)
 
             fileOutput.close()
 
@@ -132,7 +132,7 @@ class XmodemSendTask: XmodemTask("send", "Sends the passed file via XMODEM proto
 
             file.open()
 
-            XmodemSender(comPort).send(file)
+            XmodemSender(comConfig).send(file)
 
             file.close()
 
