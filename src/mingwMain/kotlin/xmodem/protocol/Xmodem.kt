@@ -12,28 +12,6 @@ import xmodem.com.ComPort
 
 object Xmodem {
 
-    fun setupAndOpenCom(comPort: ComPort, timeoutEditor: (COMMTIMEOUTS.() -> Unit)?) {
-        try {
-
-            comPort.editTimeouts(timeoutEditor ?: {})
-
-            comPort.editDCB {
-                BaudRate = CBR_9600.toUInt()
-                ByteSize = 8u
-                Parity = NOPARITY.toUByte()
-                StopBits = ONESTOPBIT.toUByte()
-            }
-
-            comPort.open()
-            comPort.fullPurge()
-
-        } catch (e: Exception) {
-
-            comPort.close()
-            throw XmodemIOException(e)
-        }
-    }
-
     const val initByteCrc16 = ASCII.C
     const val initByteSum8 = ASCII.NAK
     const val dataSize = 128

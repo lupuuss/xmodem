@@ -8,19 +8,21 @@ import ru.pocketbyte.kydra.log.warn
 import xmodem.log.Log
 import xmodem.ASCII
 import xmodem.asHex
+import xmodem.com.ComConfig
 import xmodem.com.ComPort
 import xmodem.files.FileOutput
 import xmodem.protocol.XmodemCancelException
 import xmodem.protocol.Xmodem
+import xmodem.protocol.XmodemIOException
 
 class XmodemReceiver(
-    com: String,
+    comConfig: ComConfig,
     private val timeoutMs: UInt,
     private val retries: Int,
     private val config: Xmodem.Config
 ) {
 
-    private val comPort = ComPort(com)
+    private val comPort = ComPort(comConfig)
     private var expectedPacketNumber: UByte = 1u
     private var totalPacketCount: Int = 0
     private var retriesCounter = 0
@@ -43,10 +45,21 @@ class XmodemReceiver(
         Log.info(config.toString())
         Log.info("Receiver config: {Retries limit: $retries, timeout: $timeoutMs ms}")
 
-        Xmodem.setupAndOpenCom(comPort) {
-            ReadIntervalTimeout = 100u
-            ReadTotalTimeoutConstant = timeoutMs
-            ReadTotalTimeoutMultiplier = 1u
+        try {
+
+            comPort.editTimeouts {
+                ReadIntervalTimeout = 100u
+                ReadTotalTimeoutConstant = timeoutMs
+                ReadTotalTimeoutMultiplier = 1u
+            }
+
+            comPort.open()
+            comPort.fullPurge()
+
+        } catch (e: Exception) {
+
+            comPort.close()
+            throw XmodemIOException(e)
         }
 
         comPort.write(config.initByte)

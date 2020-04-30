@@ -5,12 +5,14 @@ package xmodem.protocol.sender
 import ru.pocketbyte.kydra.log.debug
 import ru.pocketbyte.kydra.log.info
 import xmodem.ASCII
+import xmodem.com.ComConfig
 import xmodem.com.ComPort
 import xmodem.cycle
 import xmodem.files.FileInput
 import xmodem.log.Log
 import xmodem.protocol.Xmodem
 import xmodem.protocol.XmodemCancelException
+import xmodem.protocol.XmodemIOException
 import xmodem.repeatByte
 import kotlin.math.roundToInt
 
@@ -19,11 +21,11 @@ enum class State {
 }
 
 class XmodemSender(
-    com: String
+    comConfig: ComConfig
 ) {
     private val progressBarSize = 50
 
-    private val comPort = ComPort(com)
+    private val comPort = ComPort(comConfig)
 
     private var packetNumber: Byte = 1
 
@@ -38,10 +40,21 @@ class XmodemSender(
 
     fun send(file: FileInput) {
 
-        Xmodem.setupAndOpenCom(comPort) {
-            ReadIntervalTimeout = 10u
-            ReadTotalTimeoutConstant = 200u
-            ReadTotalTimeoutMultiplier = 1u
+        try {
+
+            comPort.editTimeouts {
+                ReadIntervalTimeout = 10u
+                ReadTotalTimeoutConstant = 200u
+                ReadTotalTimeoutMultiplier = 1u
+            }
+
+            comPort.open()
+            comPort.fullPurge()
+
+        } catch (e: Exception) {
+
+            comPort.close()
+            throw XmodemIOException(e)
         }
 
         val config = waitForInitConfig()
