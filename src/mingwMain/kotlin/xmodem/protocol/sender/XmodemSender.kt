@@ -12,6 +12,7 @@ import xmodem.files.FileInput
 import xmodem.log.Log
 import xmodem.protocol.Xmodem
 import xmodem.protocol.XmodemCancelException
+import xmodem.protocol.XmodemConfig
 import xmodem.protocol.XmodemIOException
 import xmodem.repeatByte
 import kotlin.math.roundToInt
@@ -21,7 +22,7 @@ enum class State {
 }
 
 class XmodemSender(
-    comConfig: ComConfig
+    private val comConfig: ComConfig
 ) {
     private val progressBarSize = 50
 
@@ -39,6 +40,8 @@ class XmodemSender(
     private var state = State.NoInit
 
     fun send(file: FileInput) {
+
+        Log.info(comConfig.toString())
 
         try {
 
@@ -131,15 +134,15 @@ class XmodemSender(
         return "[$progressString>$spaces] [$packetsCounter/$totalPackets]"
     }
 
-    private fun waitForInitConfig(): Xmodem.Config {
+    private fun waitForInitConfig(): XmodemConfig {
 
-        var config: Xmodem.Config?
+        var config: XmodemConfig?
 
         do {
 
             val receivedByte = comPort.readOrNull(1)?.firstOrNull()
 
-            config = Xmodem.Config.getBasedOnInitByte(receivedByte)
+            config = XmodemConfig.getBasedOnInitByte(receivedByte)
 
             Log.updateStatus("Waiting for config initialization${animIter.next()}")
 
@@ -151,7 +154,7 @@ class XmodemSender(
         return config
     }
 
-    private fun makePacket(rawData: ByteArray, config: Xmodem.Config): ByteArray {
+    private fun makePacket(rawData: ByteArray, config: XmodemConfig): ByteArray {
 
         val packet = ByteArray(3 + Xmodem.dataSize + config.checksumType.byteSize)
 

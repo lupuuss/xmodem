@@ -16,7 +16,7 @@ import xmodem.com.ComConfig
 import xmodem.files.FileInput
 import xmodem.files.FileOutput
 import xmodem.log.Log
-import xmodem.protocol.Xmodem
+import xmodem.protocol.XmodemConfig
 import xmodem.protocol.XmodemException
 import xmodem.protocol.receiver.XmodemReceiver
 import xmodem.protocol.sender.XmodemSender
@@ -104,7 +104,7 @@ class XmodemReceiveTask : XmodemTask("receive", "Receives a file via XMODEM prot
 
             fileOutput.open()
 
-            val config = Xmodem.Config(checksum)
+            val config = XmodemConfig(checksum)
 
             XmodemReceiver(comConfig, timeout.toUInt(), retries, config).receive(fileOutput)
 

@@ -12,14 +12,14 @@ import xmodem.com.ComConfig
 import xmodem.com.ComPort
 import xmodem.files.FileOutput
 import xmodem.protocol.XmodemCancelException
-import xmodem.protocol.Xmodem
+import xmodem.protocol.XmodemConfig
 import xmodem.protocol.XmodemIOException
 
 class XmodemReceiver(
-    comConfig: ComConfig,
+    private val comConfig: ComConfig,
     private val timeoutMs: UInt,
     private val retries: Int,
-    private val config: Xmodem.Config
+    private val config: XmodemConfig
 ) {
 
     private val comPort = ComPort(comConfig)
@@ -43,12 +43,13 @@ class XmodemReceiver(
     fun receive(file: FileOutput) {
 
         Log.info(config.toString())
+        Log.info(comConfig.toString())
         Log.info("Receiver config: {Retries limit: $retries, timeout: $timeoutMs ms}")
 
         try {
 
             comPort.editTimeouts {
-                ReadIntervalTimeout = 100u
+                ReadIntervalTimeout = 200u
                 ReadTotalTimeoutConstant = timeoutMs
                 ReadTotalTimeoutMultiplier = 1u
             }
@@ -138,25 +139,6 @@ class XmodemReceiver(
         else -> {
             State.RejectPacket("Bad byte! Received: ${byte.asHex()}")
         }
-    }
-
-    private fun readPacketFromComPort(): ByteArray {
-        var requiredBytesCount = config.packetSize - 1
-        val packetBuilder = mutableListOf(config.headerByte)
-
-        while (requiredBytesCount > 0) {
-
-            val part = comPort.readOrNull(requiredBytesCount)
-
-            if (part != null) {
-                packetBuilder.addAll(part.toList())
-                requiredBytesCount -= part.size
-            } else {
-                break
-            }
-        }
-
-        return packetBuilder.toByteArray()
     }
 
     private fun handleRetriesCount() {
