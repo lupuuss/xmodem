@@ -11,6 +11,16 @@ import xmodem.log.Log
 class ComPort(
     name: String
 ) {
+
+    constructor(config: ComConfig) : this(config.port) {
+        editDCB {
+            BaudRate = config.cbrRate.value
+            ByteSize = config.byteSize
+            Parity = config.parity.winValue
+            StopBits = config.stopBits.winValue
+        }
+    }
+
     private val prefix = "\\\\.\\"
     private val name = if (name.startsWith(prefix)) name else "$prefix$name"
     private val tag = "[Port: $name]"
