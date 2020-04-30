@@ -39,6 +39,7 @@ class ComPort(
     }
 
     fun fullPurge() {
+
         val purgeResult = PurgeComm(handle, (PURGE_RXABORT or PURGE_RXCLEAR or PURGE_TXCLEAR or PURGE_TXABORT).toUInt())
 
         if (purgeResult != TRUE) {
@@ -91,14 +92,12 @@ class ComPort(
 
     fun write(bytes: ByteArray) = memScoped {
 
-        val buffer = allocArray<ByteVar>(bytes.size)
+        val buffer = bytes.toCValues()
         val dwBytesRead = alloc<UIntVar>()
-
-        bytes.forEachIndexed { index, byte ->  buffer[index] = byte }
 
         WriteFile(
             handle,
-            buffer.pointed.ptr,
+            buffer.ptr,
             bytes.size.toUInt(),
             dwBytesRead.ptr,
             null
@@ -115,7 +114,7 @@ class ComPort(
 
         ReadFile(
             handle,
-            buffer.pointed.ptr,
+            buffer,
             bufferSize,
             readByte.ptr,
             null
@@ -127,7 +126,7 @@ class ComPort(
             return null
         }
 
-        ByteArray(readByte.value.toInt()) { buffer[it] }
+        buffer.readBytes(n)
     }
 
     fun close() {
