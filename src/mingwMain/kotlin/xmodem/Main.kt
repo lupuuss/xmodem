@@ -50,11 +50,11 @@ abstract class XmodemTask(name: String, help: String) : CliktCommand(name = name
         }
 
     private val rate by option(help = "Sets com port speed rate (in bps).")
-        .switch(*CBR.values().map { "--${it.name.toLowerCase()}" to it}.toTypedArray())
+        .switch(*CBR.values().map { "--${it.name.toLowerCase().substringAfter("_")}" to it}.toTypedArray())
         .default(CBR.BPS_9600)
 
     private val stopBits by option(help = "Sets number of stop bits.")
-        .switch(*StopBits.values().map { "--stop-${it.name.toLowerCase()} " to it }.toTypedArray())
+        .switch(*StopBits.values().map { "--stop-${it.name.toLowerCase()}" to it }.toTypedArray())
         .default(StopBits.ONE)
 
     private val dataBits by option()
@@ -66,7 +66,7 @@ abstract class XmodemTask(name: String, help: String) : CliktCommand(name = name
         .switch(*Parity.values().map { "--parity-${it.name.toLowerCase()}" to it }.toTypedArray())
         .default(Parity.NO)
 
-    protected val comConfig = ComConfig(comPort, rate, dataBits.toUByte(), parity, stopBits)
+    protected val comConfig by lazy { ComConfig(comPort, rate, dataBits.toUByte(), parity, stopBits) }
 
     fun initKydraLogger() {
         KydraLog.initDefault(level = logLevel)
@@ -148,7 +148,8 @@ class XmodemSendTask: XmodemTask("send", "Sends the passed file via XMODEM proto
 }
 
 class Main : CliktCommand(
-    printHelpOnEmptyArgs = true
+    printHelpOnEmptyArgs = true,
+    name = "xmodem"
 ) {
     override fun run() {
         if (currentContext.invokedSubcommand is XmodemReceiveTask) {
