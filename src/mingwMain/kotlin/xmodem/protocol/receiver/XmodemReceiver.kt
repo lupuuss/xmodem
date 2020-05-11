@@ -27,6 +27,8 @@ class XmodemReceiver(
     private var totalPacketCount: Int = 0
     private var retriesCounter = 0
 
+    private var previousBlock: ByteArray? = null
+
     private var state: State = State.NoInit()
         set(value) {
             field = if (field is State.NoInit && value !is State.AcceptPacket && value !is State.PacketFound) {
@@ -82,8 +84,13 @@ class XmodemReceiver(
                 if (state is State.AcceptPacket && state !is State.AcceptPacketDuplicate) {
                     expectedPacketNumber++
                     totalPacketCount++
+
+                    previousBlock?.let {
+                        file.write(it)
+                    }
+
                     val data = readDataFromPacket(packet!!)
-                    file.write(data)
+                    previousBlock = data
                 }
             }
 
@@ -106,6 +113,10 @@ class XmodemReceiver(
             printStatus()
 
         } while (!state.isFinishing)
+
+        previousBlock?.let { block ->
+            file.write(block.dropLastWhile { it == ASCII.SUB }.toByteArray())
+        }
 
         Log.updateStatus("[End of transmission, Total packets: $totalPacketCount, State: $state]")
 
@@ -158,9 +169,7 @@ class XmodemReceiver(
     private fun readDataFromPacket(packet: ByteArray): ByteArray {
         return packet.drop(3)
             .dropLast(2)
-            .dropLastWhile {
-                it == ASCII.SUB
-            }.toByteArray()
+            .toByteArray()
     }
 
     private fun checkPacket(block: ByteArray?): State {
